@@ -1,72 +1,74 @@
-import json
+import onnxruntime
 import numpy as np
 import cv2
 import base64
+import requests
 from insightface.app import FaceAnalysis
+from insightface.model_zoo import model_zoo
+from numpy.linalg import norm
 
-# Lazy init model
-app = None
+# Load InsightFace ONNX model once
+app = FaceAnalysis(name="buffalo_l", providers=['CPUExecutionProvider'])
+app.prepare(ctx_id=0)
 
-def init_model():
-    global app
-    if app is None:
-        app = FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider'])
-        app.prepare(ctx_id=0)
-
-def extract_embedding(img_bytes):
-    nparr = np.frombuffer(img_bytes, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    faces = app.get(img)
-    if not faces:
+def get_embedding_from_image(img_bytes):
+    try:
+        nparr = np.frombuffer(img_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        faces = app.get(img)
+        if not faces:
+            return None
+        return faces[0].embedding
+    except Exception as e:
+        print(f"[ERROR] Failed to process image: {e}")
         return None
-    return faces[0].embedding
 
-def find_matches(files, thumb_data, match_type, threshold):
-    init_model()
+def cosine_similarity(a, b):
+    return np.dot(a, b) / (norm(a) * norm(b))
 
-    thumbs = json.loads(thumb_data)
-    reference_embeddings = []
+def find_matches(references, thumbnails, threshold=0.35):
+    print("🔍 Matching against references...")
 
-    # Extract embeddings from uploaded base64 images
-    for f in files:
+    # Convert all reference base64 images into embeddings
+    ref_embeddings = []
+    for ref in references:
         try:
-            img_bytes = base64.b64decode(f['data'])
-            emb = extract_embedding(img_bytes)
+            img_data = base64.b64decode(ref['data'])
+            emb = get_embedding_from_image(img_data)
             if emb is not None:
-                reference_embeddings.append(emb)
+                ref_embeddings.append((ref['name'], emb))
+            else:
+                print(f"[WARN] No face found in {ref['name']}")
         except Exception as e:
-            print(f"❌ Error extracting embedding: {e}")
+            print(f"[ERROR] Base64 decoding failed for {ref['name']}: {e}")
 
-    if not reference_embeddings:
+    if not ref_embeddings:
+        print("❌ No valid reference embeddings found")
         return []
 
-    matches = []
-    for thumb in thumbs:
+    results = []
+    for thumb_url in thumbnails:
         try:
-            img_url = thumb["thumbnail"]
-            post_url = thumb["post"]
-
-            # Download thumbnail
-            resp = requests.get(img_url, timeout=10)
-            if resp.status_code != 200:
+            res = requests.get(thumb_url, timeout=10)
+            if res.status_code != 200:
+                continue
+            thumb_emb = get_embedding_from_image(res.content)
+            if thumb_emb is None:
                 continue
 
-            emb = extract_embedding(resp.content)
-            if emb is None:
-                continue
-
-            # Compare against all reference embeddings
-            for ref in reference_embeddings:
-                sim = float(np.dot(ref, emb) / (np.linalg.norm(ref) * np.linalg.norm(emb)))
+            for name, ref_emb in ref_embeddings:
+                sim = cosine_similarity(ref_emb, thumb_emb)
                 if sim >= threshold:
-                    matches.append({
-                        "similarity": sim,
-                        "match_type": match_type,
-                        "thumbnail": img_url,
-                        "post_url": post_url
+                    results.append({
+                        "thumbnail": thumb_url,
+                        "post_url": extract_post_url(thumb_url),
+                        "similarity": round(sim, 4)
                     })
-                    break  # Only need 1 good match
+                    break  # only need one match per image
         except Exception as e:
-            print(f"❌ Error processing thumbnail: {e}")
+            print(f"[ERROR] Failed to fetch thumbnail {thumb_url}: {e}")
+    return results
 
-    return matches
+def extract_post_url(thumb_url):
+    # Dummy extractor – you can improve this logic based on real patterns
+    return "https://coomer.su/post/" + thumb_url.split("/")[-1].split(".")[0]
