@@ -1,7 +1,56 @@
 <!DOCTYPE html>
 <html>
-<head><title>Coomer Scanner</title></head>
+<head>
+  <title>Coomer Scanner Backend</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #121212;
+      color: #f0f0f0;
+      padding: 20px;
+    }
+    h1 { color: #90ee90; }
+    .log {
+      background: #1e1e1e;
+      padding: 10px;
+      border-radius: 8px;
+      max-height: 400px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 14px;
+    }
+    .status { color: #0ff; margin-top: 10px; }
+  </style>
+</head>
 <body>
-<h1>Backend Running</h1>
+  <h1>🧠 Coomer Scanner Backend</h1>
+  <div class="status" id="status">Checking model...</div>
+  <div class="log" id="log">Initializing logs...</div>
+
+  <script>
+    async function checkBackend() {
+      try {
+        const res = await fetch('/health');
+        if (!res.ok) throw new Error('Not OK');
+        document.getElementById('status').textContent = '✅ Model is up!';
+      } catch (e) {
+        document.getElementById('status').textContent = '❌ Model failed to load';
+      }
+    }
+
+    async function getLogs() {
+      try {
+        const res = await fetch('/logs');
+        const text = await res.text();
+        document.getElementById('log').textContent = text;
+      } catch (e) {
+        document.getElementById('log').textContent = '⚠️ Could not fetch logs';
+      }
+    }
+
+    checkBackend();
+    getLogs();
+    setInterval(getLogs, 5000);
+  </script>
 </body>
 </html>
