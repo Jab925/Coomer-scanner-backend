@@ -1,2 +1,7 @@
 flask
 flask-cors
+insightface==0.7
+onnxruntime
+opencv-python
+numpy
+requests
