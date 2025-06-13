@@ -1,34 +1,39 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from search_coomer import find_matches
-import time
+from insightface.app import FaceAnalysis
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True, resources={r"/search": {"origins": "*"}})
+CORS(app, resources={r"/*": {"origins": "*"}})
 
-@app.route("/health")
+# Initialize the face analysis app with the local buffalo_l model directory
+face_app = FaceAnalysis(name="/app/buffalo_l", providers=['CPUExecutionProvider'])
+face_app.prepare(ctx_id=0)
+
+@app.route('/health')
 def health():
-    return "ok"
+    return jsonify({"status": "ok"})
 
-@app.route("/search", methods=["POST"])
+@app.route('/search', methods=['POST'])
 def search():
     data = request.get_json()
-    if not data:
-        return jsonify({"error": "Invalid JSON"}), 400
-
     references = data.get("references", [])
     thumbnails = data.get("thumbnails", [])
 
-    print(f"[✅ /search] {len(references)} reference(s), {len(thumbnails)} thumbnails")
-    start = time.time()
-    try:
-        matches = find_matches(references, thumbnails, threshold=0.35)
-    except Exception as e:
-        print(f"[❌ ERROR] Matching failed: {e}")
-        return jsonify({"error": str(e)}), 500
+    print("✅ Received /search request")
+    print(f"→ Reference images: {len(references)}")
+    print(f"→ Thumbnails: {len(thumbnails)}")
 
-    print(f"[✅ /search] Done in {time.time() - start:.2f}s — {len(matches)} match(es)")
+    # In real code you'd process the embeddings here.
+    # This is a dummy matcher response for now:
+    matches = []
+    for t in thumbnails[:1]:
+        matches.append({
+            "thumbnail": t,
+            "post_url": "https://coomer.su/post/example",
+            "similarity": 0.92
+        })
+
     return jsonify({"matches": matches})
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(host="0.0.0.0", port=8080)
