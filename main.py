@@ -1,37 +1,31 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import base64
 
 app = Flask(__name__)
-CORS(app)  # enable CORS for all domains
+CORS(app, resources={r"/*": {"origins": "*"}})  # ✅ Allow all origins for CORS
 
-@app.route("/health")
+@app.route('/health')
 def health():
-    return jsonify({"status": "ok"})
+    return "ok"
 
-@app.route("/client-scan", methods=["POST"])
-def scan():
-    try:
-        data = request.get_json()
-        print("✅ Received scan request")
-        print("→ Reference images:", len(data.get("references", [])))
-        print("→ Thumbnails:", len(data.get("thumbnails", [])))
+@app.route('/search', methods=['POST'])
+def search():
+    data = request.get_json()
+    print("✅ Received /search request")
+    print("→ Reference images:", len(data.get("references", [])))
+    print("→ Thumbnails:", len(data.get("thumbnails", [])))
 
-        # TEMP SIMULATED MATCH RESPONSE
-        thumbnails = data.get("thumbnails", [])
-        return jsonify({
-            "matches": [
-                {
-                    "thumbnail": t,
-                    "post_url": "https://coomer.su/post/example",
-                    "similarity": 0.92
-                }
-                for t in thumbnails[:1]
-            ]
-        })
+    # Dummy response until real match logic is integrated
+    thumbnails = data.get("thumbnails", [])
+    return jsonify({
+        "matches": [
+            {
+                "thumbnail": t,
+                "post_url": "https://coomer.su/post/example",
+                "similarity": 0.92
+            } for t in thumbnails[:1]
+        ]
+    })
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(host="0.0.0.0", port=8080)
