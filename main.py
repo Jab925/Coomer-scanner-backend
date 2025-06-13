@@ -1,58 +1,42 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-import logging
+from search_coomer import find_matches
+import base64
 import os
-import search_coomer
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-# Set up logging
-log_file = "logs.txt"
-logging.basicConfig(
-    filename=log_file,
-    filemode='a',
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s: %(message)s",
-)
+LOG_PATH = "logs.txt"
 
-@app.route('/health')
+def log(msg):
+    print(msg)
+    with open(LOG_PATH, "a") as f:
+        f.write(msg + "\n")
+
+@app.route("/health")
 def health():
     return "ok"
 
-@app.route('/search', methods=['POST'])
+@app.route("/search", methods=["POST"])
 def search():
     data = request.get_json()
-
-    # Logging input details
     references = data.get("references", [])
     thumbnails = data.get("thumbnails", [])
-    logging.info(f"✅ /search called")
-    logging.info(f"→ Reference images: {len(references)}")
-    logging.info(f"→ Thumbnails: {len(thumbnails)}")
 
-    # Call actual match function
+    log(f"[POST] /search called")
+    log(f"→ Received {len(references)} reference image(s)")
+    log(f"→ Received {len(thumbnails)} thumbnails")
+
     try:
-        match_type = "face+tattoo"
-        thumb_data = jsonify([
-            {"thumbnail": t, "post": t} for t in thumbnails
-        ]).data.decode("utf-8")
-
-        matches = search_coomer.find_matches(references, thumb_data, match_type, threshold=0.6)
-
-        logging.info(f"→ Matches found: {len(matches)}")
-        return jsonify({"matches": matches})
-
+        matches = find_matches(references, thumbnails, threshold=0.35)
+        log(f"→ Found {len(matches)} matches ≥ 35%")
+        return jsonify({ "matches": matches }), 200
     except Exception as e:
-        logging.error(f"❌ Error processing /search: {e}")
-        return jsonify({"error": str(e)}), 500
+        log(f"[ERROR] {str(e)}")
+        return jsonify({ "error": str(e) }), 500
 
-@app.route('/logs')
-def get_logs():
-    if not os.path.exists(log_file):
-        return "Log file not found.", 404
-    return send_file(log_file, mimetype='text/plain')
-
-if __name__ == '__main__':
-    logging.info("🚀 Backend started")
+if __name__ == "__main__":
+    if not os.path.exists(LOG_PATH):
+        with open(LOG_PATH, "w"): pass
     app.run(host="0.0.0.0", port=8080)
