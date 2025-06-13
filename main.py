@@ -1,58 +1,58 @@
-from flask import Flask, request, jsonify from flask_cors import CORS import onnxruntime as ort import numpy as np import base64 import cv2 import os from insightface.app import FaceAnalysis
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
+import logging
+import os
+import search_coomer
 
-app = Flask(name) CORS(app, resources={r"/": {"origins": ""}})
+app = Flask(__name__)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
-face_app = None
+# Set up logging
+log_file = "logs.txt"
+logging.basicConfig(
+    filename=log_file,
+    filemode='a',
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s: %(message)s",
+)
 
-@app.before_first_request def load_model(): global face_app print("🔄 Loading face analysis model...") face_app = FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider']) face_app.prepare(ctx_id=0) print("✅ Model ready")
+@app.route('/health')
+def health():
+    return "ok"
 
-def get_embedding_from_base64(b64): try: img_bytes = base64.b64decode(b64) img_np = np.frombuffer(img_bytes, dtype=np.uint8) img = cv2.imdecode(img_np, cv2.IMREAD_COLOR) faces = face_app.get(img) if faces: return faces[0].embedding.tolist() else: return None except Exception as e: print("❌ Embedding extraction error:", e) return None
+@app.route('/search', methods=['POST'])
+def search():
+    data = request.get_json()
 
-def cosine_similarity(vec1, vec2): v1 = np.array(vec1) v2 = np.array(vec2) return float(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
+    # Logging input details
+    references = data.get("references", [])
+    thumbnails = data.get("thumbnails", [])
+    logging.info(f"✅ /search called")
+    logging.info(f"→ Reference images: {len(references)}")
+    logging.info(f"→ Thumbnails: {len(thumbnails)}")
 
-@app.route('/health') def health(): return "ok"
-
-@app.route('/search', methods=['POST']) def search(): data = request.get_json() print("✅ Received /search request") references = data.get("references", []) thumbnails = data.get("thumbnails", [])
-
-print("→ Reference images:", len(references))
-print("→ Thumbnails:", len(thumbnails))
-
-ref_embeddings = []
-for ref in references:
-    emb = get_embedding_from_base64(ref['data'])
-    if emb:
-        ref_embeddings.append(emb)
-
-matches = []
-for t in thumbnails:
+    # Call actual match function
     try:
-        # Download image from URL
-        resp = cv2.VideoCapture(t)
-        if not resp.isOpened():
-            print("❌ Cannot open thumbnail:", t)
-            continue
-        ret, frame = resp.read()
-        if not ret:
-            print("❌ Failed to read thumbnail:", t)
-            continue
-        faces = face_app.get(frame)
-        if not faces:
-            continue
-        emb = faces[0].embedding.tolist()
-        best_sim = 0
-        for ref_emb in ref_embeddings:
-            sim = cosine_similarity(emb, ref_emb)
-            if sim > best_sim:
-                best_sim = sim
-        matches.append({
-            "thumbnail": t,
-            "post_url": t,
-            "similarity": best_sim
-        })
+        match_type = "face+tattoo"
+        thumb_data = jsonify([
+            {"thumbnail": t, "post": t} for t in thumbnails
+        ]).data.decode("utf-8")
+
+        matches = search_coomer.find_matches(references, thumb_data, match_type, threshold=0.6)
+
+        logging.info(f"→ Matches found: {len(matches)}")
+        return jsonify({"matches": matches})
+
     except Exception as e:
-        print("❌ Error processing thumbnail:", t, e)
+        logging.error(f"❌ Error processing /search: {e}")
+        return jsonify({"error": str(e)}), 500
 
-return jsonify({"matches": matches})
+@app.route('/logs')
+def get_logs():
+    if not os.path.exists(log_file):
+        return "Log file not found.", 404
+    return send_file(log_file, mimetype='text/plain')
 
-if name == 'main': app.run(host="0.0.0.0", port=8080)
-
+if __name__ == '__main__':
+    logging.info("🚀 Backend started")
+    app.run(host="0.0.0.0", port=8080)
