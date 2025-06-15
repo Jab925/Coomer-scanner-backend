@@ -1,0 +1,12 @@
+# Python artifacts
+__pycache__/
+*.pyc
+
+# Model files
+buffalo_l/
+*.zip
+*.onnx
+
+# Misc
+.DS_Store
+*.log
