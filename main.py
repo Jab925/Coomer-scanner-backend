@@ -1,39 +1,31 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+import os
+import urllib.request
+import zipfile
+
 from insightface.app import FaceAnalysis
 
-app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
+MODEL_DIR = "/app/buffalo_l"
+ZIP_PATH = "/app/buffalo_l.zip"
+MODEL_URL = "https://drive.google.com/uc?export=download&id=1yxiWQzsnpmh9DLO5R6CNaH4vmhYXmOYo"
 
-# Initialize the face analysis app with the local buffalo_l model directory
-face_app = FaceAnalysis(name="/app/buffalo_l", providers=['CPUExecutionProvider'])
-face_app.prepare(ctx_id=0)
+def ensure_model():
+    if not os.path.exists(MODEL_DIR):
+        print("🔹 buffalo_l not found — downloading...")
+        urllib.request.urlretrieve(MODEL_URL, ZIP_PATH)
+        print("✅ Download complete — extracting...")
+        with zipfile.ZipFile(ZIP_PATH, 'r') as zip_ref:
+            zip_ref.extractall("/app")
+        print("✅ Extraction done!")
+    else:
+        print("✅ buffalo_l already exists — skipping download.")
 
-@app.route('/health')
-def health():
-    return jsonify({"status": "ok"})
+# Run the model setup
+ensure_model()
 
-@app.route('/search', methods=['POST'])
-def search():
-    data = request.get_json()
-    references = data.get("references", [])
-    thumbnails = data.get("thumbnails", [])
+# Now set up FaceAnalysis
+print("🔹 Initializing FaceAnalysis...")
+app = FaceAnalysis(name=MODEL_DIR, providers=['CPUExecutionProvider'])
+app.prepare(ctx_id=0)
+print("✅ FaceAnalysis ready!")
 
-    print("✅ Received /search request")
-    print(f"→ Reference images: {len(references)}")
-    print(f"→ Thumbnails: {len(thumbnails)}")
-
-    # In real code you'd process the embeddings here.
-    # This is a dummy matcher response for now:
-    matches = []
-    for t in thumbnails[:1]:
-        matches.append({
-            "thumbnail": t,
-            "post_url": "https://coomer.su/post/example",
-            "similarity": 0.92
-        })
-
-    return jsonify({"matches": matches})
-
-if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=8080)
+# Your app logic would go here — e.g. starting Flask, processing images
