@@ -49,11 +49,13 @@ def search():
     matches = []
     for thumb in thumbnails:
         if isinstance(thumb, dict):
+            similarity = round(random.uniform(0.3, 0.95), 4)  # Simulate realistic similarity
             matches.append({
                 "thumbnail": thumb.get("thumbnail"),
-                "post_url": thumb.get("post_url") or thumb.get("post"),
-                "similarity": round(random.uniform(0.3, 0.95), 2)  # simulate varied results
+                "post_url": thumb.get("post_url"),
+                "similarity": similarity
             })
+            print(f"📌 Match generated: {thumb.get('thumbnail')} → {similarity}")
 
     return jsonify({"matches": matches})
 
