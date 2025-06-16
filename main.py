@@ -21,12 +21,12 @@ def ensure_model():
         try:
             with zipfile.ZipFile(ZIP_PATH, 'r') as zip_ref:
                 zip_ref.extractall(MODEL_DIR)
-            print("✅ Extraction done, model ready")
+            print("✅ Extraction done")
         except zipfile.BadZipFile:
             print("❌ The downloaded file is not a valid ZIP file.")
             raise
     else:
-        print("✅ Model already present at", MODEL_DIR)
+        print("✅ Model already present")
 
 @app.route('/health')
 def health():
@@ -38,22 +38,22 @@ def search():
     try:
         data = request.get_json(force=True)
     except Exception as e:
-        print(f"❌ Invalid JSON: {e}")
         return jsonify({'error': f'Invalid JSON: {str(e)}'}), 415
 
-    references = data.get("references", [])
+    print("✅ Received /search request")
+    print("→ Reference images:", len(data.get("references", [])))
+    print("→ Thumbnails:", len(data.get("thumbnails", [])))
+
+    # Instead of dummy link, return actual provided thumb + post_url data
     thumbnails = data.get("thumbnails", [])
-
-    print(f"✅ Received /search request with {len(references)} references and {len(thumbnails)} thumbnails")
-
-    # 👉 Replace below with real matching logic when ready
     matches = []
-    if thumbnails:
-        matches.append({
-            "thumbnail": thumbnails[0],  # Show first thumb
-            "post_url": "https://coomer.su/post/real-mock-post",  # Replace with real post URL in real match
-            "similarity": 0.92
-        })
+    for thumb in thumbnails:
+        if isinstance(thumb, dict):
+            matches.append({
+                "thumbnail": thumb.get("thumbnail"),
+                "post_url": thumb.get("post"),
+                "similarity": 0.92  # or real similarity once model logic added
+            })
 
     return jsonify({"matches": matches})
 
