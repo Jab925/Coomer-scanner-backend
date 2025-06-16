@@ -48,8 +48,8 @@ def search():
     return jsonify({
         "matches": [
             {
-                "thumbnail": t,
-                "post_url": "https://coomer.su/post/example",
+                "thumbnail": t["thumbnail"],
+                "post_url": t["post"],
                 "similarity": 0.92
             } for t in thumbnails[:1]
         ]
