@@ -3,6 +3,7 @@ from flask_cors import CORS
 import os
 import subprocess
 import zipfile
+import random
 
 app = Flask(__name__)
 CORS(app)
@@ -41,18 +42,17 @@ def search():
         return jsonify({'error': f'Invalid JSON: {str(e)}'}), 415
 
     print("✅ Received /search request")
-    print("→ Reference images:", len(data.get("references", [])))
-    print("→ Thumbnails:", len(data.get("thumbnails", [])))
+    print(f"→ Reference images: {len(data.get('references', []))}")
+    print(f"→ Thumbnails: {len(data.get('thumbnails', []))}")
 
-    # Instead of dummy link, return actual provided thumb + post_url data
     thumbnails = data.get("thumbnails", [])
     matches = []
     for thumb in thumbnails:
         if isinstance(thumb, dict):
             matches.append({
                 "thumbnail": thumb.get("thumbnail"),
-                "post_url": thumb.get("post"),
-                "similarity": 0.92  # or real similarity once model logic added
+                "post_url": thumb.get("post_url") or thumb.get("post"),
+                "similarity": round(random.uniform(0.3, 0.95), 2)  # simulate varied results
             })
 
     return jsonify({"matches": matches})
