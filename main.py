@@ -14,10 +14,7 @@ GDRIVE_FILE_ID = "1yxiWQzsnpmh9DLO5R6CNaH4vmhYXmOYo"
 def ensure_model():
     if not os.path.exists(MODEL_DIR):
         print("📦 Model not found — downloading from Google Drive with gdown...")
-        # Ensure gdown is installed
         subprocess.run(["pip", "install", "--no-cache-dir", "gdown"], check=True)
-
-        # Download the file using gdown
         subprocess.run(["gdown", "--id", GDRIVE_FILE_ID, "-O", ZIP_PATH], check=True)
 
         print("✅ Download complete — extracting...")
@@ -26,7 +23,7 @@ def ensure_model():
                 zip_ref.extractall(MODEL_DIR)
             print("✅ Extraction done")
         except zipfile.BadZipFile:
-            print("❌ The downloaded file is not a valid ZIP file. Please check the Google Drive link and permissions.")
+            print("❌ The downloaded file is not a valid ZIP file.")
             raise
     else:
         print("✅ Model already present")
@@ -38,13 +35,15 @@ def health():
 @app.route('/search', methods=['POST'])
 def search():
     ensure_model()
+    try:
+        data = request.get_json(force=True)
+    except Exception as e:
+        return jsonify({'error': f'Invalid JSON: {str(e)}'}), 415
 
-    data = request.get_json()
     print("✅ Received /search request")
     print("→ Reference images:", len(data.get("references", [])))
     print("→ Thumbnails:", len(data.get("thumbnails", [])))
 
-    # Dummy response for now
     thumbnails = data.get("thumbnails", [])
     return jsonify({
         "matches": [
