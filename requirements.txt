@@ -5,3 +5,4 @@ onnxruntime
 opencv-python
 numpy
 requests
+gdown
