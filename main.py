@@ -7,27 +7,38 @@ import requests
 from insightface.app import FaceAnalysis
 
 app = Flask(__name__)
-CORS(app, origins=["https://coomer.su"])
+CORS(app, origins=["https://coomer.su"])  # Allow only coomer.su frontend
 
+MODEL_DIR = "/app/buffalo_l"
 face_app = None
-MODEL_DIR = "/app/buffalo_l"  # Path inside your Docker where buffalo_l is pre-bundled
 
 def init_face_app():
     global face_app
     face_app = FaceAnalysis(name="buffalo_l", root=MODEL_DIR, providers=["CPUExecutionProvider"])
     face_app.prepare(ctx_id=0)
-    print("✅ FaceAnalysis model loaded")
+    print("✅ Face model loaded and ready")
 
-def decode_base64_img(data):
+def decode_base64_img(b64_data):
     try:
-        img_bytes = base64.b64decode(data)
-        img_np = np.frombuffer(img_bytes, np.uint8)
-        return cv2.imdecode(img_np, cv2.IMREAD_COLOR)
+        img_data = base64.b64decode(b64_data)
+        np_arr = np.frombuffer(img_data, np.uint8)
+        img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        return img
     except Exception as e:
         print(f"❌ Failed to decode base64 image: {e}")
         return None
 
-def extract_embedding(img):
+def download_and_decode_url(url):
+    try:
+        resp = requests.get(url, timeout=10)
+        np_arr = np.frombuffer(resp.content, np.uint8)
+        img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        return img
+    except Exception as e:
+        print(f"❌ Failed to fetch image {url}: {e}")
+        return None
+
+def get_embedding(img):
     faces = face_app.get(img)
     if faces:
         return faces[0].normed_embedding
@@ -45,50 +56,45 @@ def search():
     try:
         data = request.get_json(force=True)
     except Exception as e:
-        return jsonify({'error': f'Invalid JSON: {str(e)}'}), 400
+        return jsonify({"error": f"Invalid JSON: {str(e)}"}), 400
 
-    print("✅ Received /search request")
     references = data.get("references", [])
     thumbnails = data.get("thumbnails", [])
 
+    print(f"✅ Received {len(references)} references and {len(thumbnails)} thumbnails")
+
+    # Process reference images
     ref_embeddings = []
     for ref in references:
         img = decode_base64_img(ref.get("data", ""))
         if img is not None:
-            emb = extract_embedding(img)
+            emb = get_embedding(img)
             if emb is not None:
                 ref_embeddings.append(emb)
 
     if not ref_embeddings:
-        print("⚠ No valid reference embeddings")
+        print("❌ No valid reference embeddings")
         return jsonify({"matches": []})
 
+    # Process thumbnails
     matches = []
     for thumb in thumbnails:
         img_url = thumb.get("thumbnail")
         post_url = thumb.get("post_url")
-        try:
-            resp = requests.get(img_url, timeout=5)
-            img = cv2.imdecode(np.frombuffer(resp.content, np.uint8), cv2.IMREAD_COLOR)
-        except Exception as e:
-            print(f"❌ Failed to load image {img_url}: {e}")
-            continue
-
+        img = download_and_decode_url(img_url)
         if img is None:
             continue
-
-        emb = extract_embedding(img)
+        emb = get_embedding(img)
         if emb is None:
             continue
 
-        sims = [cosine_similarity(emb, ref_emb) for ref_emb in ref_embeddings]
-        max_sim = max(sims)
+        similarities = [cosine_similarity(emb, ref_emb) for ref_emb in ref_embeddings]
+        max_sim = max(similarities)
         matches.append({
             "thumbnail": img_url,
             "post_url": post_url,
             "similarity": round(max_sim, 4)
         })
-        print(f"📌 {img_url} → {round(max_sim, 4)}")
 
     return jsonify({"matches": matches})
 
