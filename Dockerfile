@@ -1,7 +1,6 @@
-# Use Python base image
 FROM python:3.9-slim
 
-# Install system dependencies needed for insightface + gdown
+# Install system dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     build-essential \
@@ -9,26 +8,27 @@ RUN apt-get update && \
     libgl1-mesa-glx \
     libglib2.0-0 \
     unzip \
-    && rm -rf /var/lib/apt/lists/*
+    curl && \
+    rm -rf /var/lib/apt/lists/*
 
-# Set work directory
+# Set working directory
 WORKDIR /app
 
-# Install gdown and other Python dependencies
+# Copy and install Python requirements
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install --no-cache-dir gdown
 
-# Download buffalo_l.zip and extract it
-RUN gdown --id 1yxiWQzsnpmh9DLO5R6CNaH4vmhYXmOYo -O /app/buffalo_l.zip && \
-    unzip /app/buffalo_l.zip -d /app/buffalo_l && \
-    rm /app/buffalo_l.zip
+# Download buffalo_l.zip from Google Drive and unzip it
+# Replace the ID below if you change your Drive link
+RUN curl -L -o buffalo_l.zip "https://drive.google.com/uc?export=download&id=1yxiWQzsnpmh9DLO5R6CNaH4vmhYXmOYo" && \
+    unzip buffalo_l.zip && \
+    rm buffalo_l.zip
 
-# Copy your app code into the container
+# Copy your app code
 COPY . .
 
-# Expose port (optional, depending on your app)
+# Expose port
 EXPOSE 8080
 
-# Command to run the app
+# Run the app
 CMD ["python", "main.py"]
