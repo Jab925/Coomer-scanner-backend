@@ -1,62 +1,37 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import os
-import subprocess
-import zipfile
 import numpy as np
-from insightface.app import FaceAnalysis
-from insightface.utils import face_align
 import cv2
 import base64
-from io import BytesIO
+import requests
+from insightface.app import FaceAnalysis
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=["https://coomer.su"])
 
-MODEL_DIR = "/app/buffalo_l"
-ZIP_PATH = "/app/buffalo_l.zip"
-GDRIVE_FILE_ID = "1yxiWQzsnpmh9DLO5R6CNaH4vmhYXmOYo"
 face_app = None
-
-def ensure_model():
-    if not os.path.exists(MODEL_DIR):
-        print("📦 Model not found — downloading from Google Drive with gdown...")
-        subprocess.run(["pip", "install", "--no-cache-dir", "gdown"], check=True)
-        subprocess.run(["gdown", "--id", GDRIVE_FILE_ID, "-O", ZIP_PATH], check=True)
-
-        print("✅ Download complete — extracting...")
-        try:
-            with zipfile.ZipFile(ZIP_PATH, 'r') as zip_ref:
-                zip_ref.extractall(MODEL_DIR)
-            print("✅ Extraction done")
-        except zipfile.BadZipFile:
-            print("❌ The downloaded file is not a valid ZIP file.")
-            raise
-    else:
-        print("✅ Model already present")
+MODEL_DIR = "/app/buffalo_l"  # Path inside your Docker where buffalo_l is pre-bundled
 
 def init_face_app():
     global face_app
-    ensure_model()
-    face_app = FaceAnalysis(name="buffalo_l", root=MODEL_DIR)
+    face_app = FaceAnalysis(name="buffalo_l", root=MODEL_DIR, providers=["CPUExecutionProvider"])
     face_app.prepare(ctx_id=0)
+    print("✅ FaceAnalysis model loaded")
 
-def decode_base64_img(b64_data):
+def decode_base64_img(data):
     try:
-        img_data = base64.b64decode(b64_data)
-        np_arr = np.frombuffer(img_data, np.uint8)
-        img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-        return img
+        img_bytes = base64.b64decode(data)
+        img_np = np.frombuffer(img_bytes, np.uint8)
+        return cv2.imdecode(img_np, cv2.IMREAD_COLOR)
     except Exception as e:
-        print(f"❌ Failed to decode image: {e}")
+        print(f"❌ Failed to decode base64 image: {e}")
         return None
 
 def extract_embedding(img):
     faces = face_app.get(img)
     if faces:
         return faces[0].normed_embedding
-    else:
-        return None
+    return None
 
 def cosine_similarity(a, b):
     return float(np.dot(a, b))
@@ -70,15 +45,14 @@ def search():
     try:
         data = request.get_json(force=True)
     except Exception as e:
-        return jsonify({'error': f'Invalid JSON: {str(e)}'}), 415
+        return jsonify({'error': f'Invalid JSON: {str(e)}'}), 400
 
     print("✅ Received /search request")
-    references_data = data.get("references", [])
-    thumbnails_data = data.get("thumbnails", [])
+    references = data.get("references", [])
+    thumbnails = data.get("thumbnails", [])
 
-    # Extract reference embeddings
     ref_embeddings = []
-    for ref in references_data:
+    for ref in references:
         img = decode_base64_img(ref.get("data", ""))
         if img is not None:
             emb = extract_embedding(img)
@@ -86,29 +60,35 @@ def search():
                 ref_embeddings.append(emb)
 
     if not ref_embeddings:
+        print("⚠ No valid reference embeddings")
         return jsonify({"matches": []})
 
     matches = []
-    for thumb in thumbnails_data:
+    for thumb in thumbnails:
         img_url = thumb.get("thumbnail")
-        img = cv2.imdecode(
-            np.frombuffer(requests.get(img_url).content, np.uint8),
-            cv2.IMREAD_COLOR
-        )
+        post_url = thumb.get("post_url")
+        try:
+            resp = requests.get(img_url, timeout=5)
+            img = cv2.imdecode(np.frombuffer(resp.content, np.uint8), cv2.IMREAD_COLOR)
+        except Exception as e:
+            print(f"❌ Failed to load image {img_url}: {e}")
+            continue
+
         if img is None:
             continue
+
         emb = extract_embedding(img)
         if emb is None:
             continue
 
         sims = [cosine_similarity(emb, ref_emb) for ref_emb in ref_embeddings]
-        similarity = max(sims)
-
+        max_sim = max(sims)
         matches.append({
             "thumbnail": img_url,
-            "post_url": thumb.get("post_url"),
-            "similarity": round(similarity, 4)
+            "post_url": post_url,
+            "similarity": round(max_sim, 4)
         })
+        print(f"📌 {img_url} → {round(max_sim, 4)}")
 
     return jsonify({"matches": matches})
 
