@@ -9,7 +9,7 @@ from insightface.app import FaceAnalysis
 app = Flask(__name__)
 CORS(app)
 
-# Initialize FaceAnalysis without trying to download anything
+# ✅ Use preloaded model, no download
 face_app = FaceAnalysis(
     name="buffalo_l",
     root="/app/buffalo_l",
@@ -48,6 +48,8 @@ def search():
     except Exception as e:
         return jsonify({'error': f'Invalid JSON: {str(e)}'}), 415
 
+    print("✅ Received /search request")
+
     references = data.get("references", [])
     thumbnails = data.get("thumbnails", [])
 
@@ -66,11 +68,9 @@ def search():
     for thumb in thumbnails:
         try:
             resp = requests.get(thumb["thumbnail"], timeout=5)
-            img = cv2.imdecode(
-                np.frombuffer(resp.content, np.uint8),
-                cv2.IMREAD_COLOR
-            )
-        except:
+            img = cv2.imdecode(np.frombuffer(resp.content, np.uint8), cv2.IMREAD_COLOR)
+        except Exception as e:
+            print(f"❌ Failed to load thumbnail: {e}")
             continue
 
         if img is None:
