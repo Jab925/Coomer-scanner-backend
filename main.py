@@ -9,7 +9,7 @@ from insightface.app import FaceAnalysis
 app = Flask(__name__)
 CORS(app)
 
-# ✅ Correct root points to local model dir — no download attempt
+# ✅ Use local model dir — no download
 face_app = FaceAnalysis(name="buffalo_l", root="/app/buffalo_l", providers=["CPUExecutionProvider"])
 face_app.prepare(ctx_id=0)
 
