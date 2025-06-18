@@ -9,8 +9,8 @@ from insightface.app import FaceAnalysis
 app = Flask(__name__)
 CORS(app)
 
-# Initialize the model (no downloading)
-face_app = FaceAnalysis(name="buffalo_l", root="/app/buffalo_l")
+# Initialize face app without download attempts
+face_app = FaceAnalysis(name="buffalo_l", root="/app/buffalo_l", providers=["CPUExecutionProvider"])
 face_app.prepare(ctx_id=0)
 
 def decode_base64_img(b64_data):
@@ -44,13 +44,11 @@ def search():
     except Exception as e:
         return jsonify({'error': f'Invalid JSON: {str(e)}'}), 415
 
-    print("✅ Received /search request")
-    references_data = data.get("references", [])
-    thumbnails_data = data.get("thumbnails", [])
+    references = data.get("references", [])
+    thumbnails = data.get("thumbnails", [])
 
-    # Extract reference embeddings
     ref_embeddings = []
-    for ref in references_data:
+    for ref in references:
         img = decode_base64_img(ref.get("data", ""))
         if img is not None:
             emb = extract_embedding(img)
@@ -61,18 +59,15 @@ def search():
         return jsonify({"matches": []})
 
     matches = []
-    for thumb in thumbnails_data:
-        img_url = thumb.get("thumbnail")
+    for thumb in thumbnails:
         try:
-            img_resp = requests.get(img_url, timeout=5)
-            img = cv2.imdecode(
-                np.frombuffer(img_resp.content, np.uint8),
-                cv2.IMREAD_COLOR
-            )
+            resp = requests.get(thumb["thumbnail"], timeout=5)
+            img = cv2.imdecode(np.frombuffer(resp.content, np.uint8), cv2.IMREAD_COLOR)
         except:
             continue
         if img is None:
             continue
+
         emb = extract_embedding(img)
         if emb is None:
             continue
@@ -81,12 +76,12 @@ def search():
         similarity = max(sims)
 
         matches.append({
-            "thumbnail": img_url,
-            "post_url": thumb.get("post_url"),
+            "thumbnail": thumb["thumbnail"],
+            "post_url": thumb["post_url"],
             "similarity": round(similarity, 4)
         })
 
     return jsonify({"matches": matches})
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
