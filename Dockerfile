@@ -28,7 +28,7 @@ RUN curl -L "https://www.dropbox.com/scl/fi/6kpvzmv25fs3r2im5ztq9/buffalo_l.zip?
     unzip buffalo_l.zip -d /app/buffalo_l && \
     rm buffalo_l.zip
 
-# Copy application code
+# Copy app code
 COPY . .
 
 # Expose port
