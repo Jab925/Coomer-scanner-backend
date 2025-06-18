@@ -1,6 +1,7 @@
+# Use Python base image
 FROM python:3.9-slim
 
-# Install system dependencies
+# Install required system dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     build-essential \
@@ -14,21 +15,24 @@ RUN apt-get update && \
 # Set working directory
 WORKDIR /app
 
-# Copy requirements and install
+# Copy Python requirements
 COPY requirements.txt .
+
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy your app code
-COPY . .
-
-# Make sure target directories exist
-RUN mkdir -p buffalo_l/models
-
-# Download and unzip from Dropbox
-RUN curl -L "https://www.dropbox.com/scl/fi/6kpvzmv25fs3r2im5ztq9/buffalo_l.zip?rlkey=0nlgnsc9qkt6evwi8vwxcycnu&st=6sjlg1d3&dl=1" -o buffalo_l.zip && \
-    unzip buffalo_l.zip -d buffalo_l/models && \
+# Download and extract model from Dropbox
+RUN curl -L "https://www.dropbox.com/scl/fi/6kpvzmv25fs3r2im5ztq9/buffalo_l.zip?rlkey=0nlgnsc9qkt6evwi8vwxcycnu&st=6sjlg1d3&dl=1" \
+    -o buffalo_l.zip && \
+    mkdir -p /app/buffalo_l && \
+    unzip buffalo_l.zip -d /app/buffalo_l && \
     rm buffalo_l.zip
 
+# Copy app code
+COPY . .
+
+# Expose port
 EXPOSE 8080
 
+# Run app
 CMD ["python", "main.py"]
