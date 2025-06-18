@@ -22,13 +22,13 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Download and extract model from Dropbox
-RUN curl -L "https://www.dropbox.com/scl/fi/6kpvzmv25fs3r2im5ztq9/buffalo_l.zip?rlkey=0nlgnsc9qkt6evwi8vwxcycnu&st=6sjlg1d3&dl=1" \
+RUN curl -L "https://www.dropbox.com/scl/fi/6kpvzmv25fs3r2im5ztq9/buffalo_l.zip?rlkey=0nlgnsc9qkt6evwi8vwxcycnu&st=glukkdhq&dl=1" \
     -o buffalo_l.zip && \
     mkdir -p /app/buffalo_l && \
     unzip buffalo_l.zip -d /app/buffalo_l && \
     rm buffalo_l.zip
 
-# Copy app code
+# Copy application code
 COPY . .
 
 # Expose port
