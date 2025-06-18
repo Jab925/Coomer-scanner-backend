@@ -18,10 +18,13 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy app code
+# Copy your app code
 COPY . .
 
-# Download and extract model from Dropbox
+# Make sure target directories exist
+RUN mkdir -p buffalo_l/models
+
+# Download and unzip from Dropbox
 RUN curl -L "https://www.dropbox.com/scl/fi/6kpvzmv25fs3r2im5ztq9/buffalo_l.zip?rlkey=0nlgnsc9qkt6evwi8vwxcycnu&st=6sjlg1d3&dl=1" -o buffalo_l.zip && \
     unzip buffalo_l.zip -d buffalo_l/models && \
     rm buffalo_l.zip
