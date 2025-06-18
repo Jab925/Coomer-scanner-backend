@@ -1,6 +1,6 @@
 flask
 flask-cors
-insightface==0.7
+insightface==0.8.8
 onnxruntime
 opencv-python-headless
 numpy
