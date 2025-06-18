@@ -1,6 +1,6 @@
 flask
 flask-cors
-insightface==0.8.8
+insightface @ git+https://github.com/deepinsight/insightface.git
 onnxruntime
 opencv-python-headless
 numpy
