@@ -9,7 +9,7 @@ from insightface.app import FaceAnalysis
 app = Flask(__name__)
 CORS(app)
 
-# Initialize FaceAnalysis with local model (no download attempts)
+# Initialize FaceAnalysis with local model only (no download)
 face_app = FaceAnalysis(
     name="buffalo_l",
     root="/app/buffalo_l",
@@ -25,7 +25,7 @@ def decode_base64_img(b64_data):
         img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
         return img
     except Exception as e:
-        print(f"❌ Failed to decode image: {e}")
+        print(f"❌ Failed to decode reference image: {e}")
         return None
 
 def extract_embedding(img):
@@ -67,7 +67,8 @@ def search():
         try:
             resp = requests.get(thumb["thumbnail"], timeout=5)
             img = cv2.imdecode(np.frombuffer(resp.content, np.uint8), cv2.IMREAD_COLOR)
-        except Exception:
+        except Exception as e:
+            print(f"❌ Failed to load thumbnail: {e}")
             continue
 
         if img is None:
