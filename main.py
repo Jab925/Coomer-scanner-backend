@@ -9,7 +9,7 @@ from insightface.app import FaceAnalysis
 app = Flask(__name__)
 CORS(app)
 
-# Initialize face app without download attempts
+# ✅ Correct root points to local model dir — no download attempt
 face_app = FaceAnalysis(name="buffalo_l", root="/app/buffalo_l", providers=["CPUExecutionProvider"])
 face_app.prepare(ctx_id=0)
 
@@ -27,8 +27,7 @@ def extract_embedding(img):
     faces = face_app.get(img)
     if faces:
         return faces[0].normed_embedding
-    else:
-        return None
+    return None
 
 def cosine_similarity(a, b):
     return float(np.dot(a, b))
