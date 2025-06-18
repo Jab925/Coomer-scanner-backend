@@ -9,8 +9,13 @@ from insightface.app import FaceAnalysis
 app = Flask(__name__)
 CORS(app)
 
-# ✅ Use local model dir — no download
-face_app = FaceAnalysis(name="buffalo_l", root="/app/buffalo_l", providers=["CPUExecutionProvider"])
+# Initialize FaceAnalysis without trying to download anything
+face_app = FaceAnalysis(
+    name="buffalo_l",
+    root="/app/buffalo_l",
+    providers=["CPUExecutionProvider"],
+    download=False
+)
 face_app.prepare(ctx_id=0)
 
 def decode_base64_img(b64_data):
@@ -61,9 +66,13 @@ def search():
     for thumb in thumbnails:
         try:
             resp = requests.get(thumb["thumbnail"], timeout=5)
-            img = cv2.imdecode(np.frombuffer(resp.content, np.uint8), cv2.IMREAD_COLOR)
+            img = cv2.imdecode(
+                np.frombuffer(resp.content, np.uint8),
+                cv2.IMREAD_COLOR
+            )
         except:
             continue
+
         if img is None:
             continue
 
@@ -82,5 +91,5 @@ def search():
 
     return jsonify({"matches": matches})
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(host="0.0.0.0", port=8080)
