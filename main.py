@@ -9,12 +9,12 @@ from insightface.app import FaceAnalysis
 app = Flask(__name__)
 CORS(app)
 
-# Initialize model using pre-downloaded files
+# Initialize model
 face_app = FaceAnalysis(
     name="buffalo_l",
     root="/app/buffalo_l",
     providers=["CPUExecutionProvider"],
-    download=False  # prevent downloading at runtime
+    download=False
 )
 face_app.prepare(ctx_id=0)
 
@@ -66,9 +66,13 @@ def search():
     for thumb in thumbnails:
         try:
             resp = requests.get(thumb["thumbnail"], timeout=5)
+            if resp.status_code != 200:
+                continue
             img = cv2.imdecode(np.frombuffer(resp.content, np.uint8), cv2.IMREAD_COLOR)
-        except:
+        except Exception as e:
+            print(f"❌ Error fetching thumbnail: {e}")
             continue
+
         if img is None:
             continue
 
