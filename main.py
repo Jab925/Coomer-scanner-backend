@@ -9,12 +9,12 @@ from insightface.app import FaceAnalysis
 app = Flask(__name__)
 CORS(app)
 
-# Initialize FaceAnalysis using preloaded model
+# Initialize model using pre-downloaded files
 face_app = FaceAnalysis(
     name="buffalo_l",
     root="/app/buffalo_l",
     providers=["CPUExecutionProvider"],
-    download=False  # prevent trying to download from internet
+    download=False  # prevent downloading at runtime
 )
 face_app.prepare(ctx_id=0)
 
@@ -67,16 +67,18 @@ def search():
         try:
             resp = requests.get(thumb["thumbnail"], timeout=5)
             img = cv2.imdecode(np.frombuffer(resp.content, np.uint8), cv2.IMREAD_COLOR)
-        except Exception:
+        except:
             continue
         if img is None:
             continue
+
         emb = extract_embedding(img)
         if emb is None:
             continue
 
         sims = [cosine_similarity(emb, ref_emb) for ref_emb in ref_embeddings]
         similarity = max(sims)
+
         matches.append({
             "thumbnail": thumb["thumbnail"],
             "post_url": thumb["post_url"],
