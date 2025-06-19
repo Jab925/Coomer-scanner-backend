@@ -9,7 +9,6 @@ from insightface.app import FaceAnalysis
 app = Flask(__name__)
 CORS(app)
 
-# Initialize model
 face_app = FaceAnalysis(
     name="buffalo_l",
     root="/app/buffalo_l",
@@ -46,6 +45,7 @@ def search():
     try:
         data = request.get_json(force=True)
     except Exception as e:
+        print(f"❌ 415 error: Invalid JSON: {e}")
         return jsonify({'error': f'Invalid JSON: {str(e)}'}), 415
 
     references = data.get("references", [])
@@ -60,6 +60,7 @@ def search():
                 ref_embeddings.append(emb)
 
     if not ref_embeddings:
+        print("⚠ No valid reference embeddings")
         return jsonify({"matches": []})
 
     matches = []
@@ -67,6 +68,7 @@ def search():
         try:
             resp = requests.get(thumb["thumbnail"], timeout=5)
             if resp.status_code != 200:
+                print(f"❌ Failed to fetch thumbnail: {thumb['thumbnail']} {resp.status_code}")
                 continue
             img = cv2.imdecode(np.frombuffer(resp.content, np.uint8), cv2.IMREAD_COLOR)
         except Exception as e:
@@ -82,11 +84,13 @@ def search():
 
         sims = [cosine_similarity(emb, ref_emb) for ref_emb in ref_embeddings]
         similarity = max(sims)
+        normalized = (similarity + 1) / 2
+        print(f"✅ Match: {thumb['thumbnail']} → raw {similarity:.4f}, normalized {normalized:.4f}")
 
         matches.append({
             "thumbnail": thumb["thumbnail"],
             "post_url": thumb["post_url"],
-            "similarity": round(similarity, 4)
+            "similarity": round(normalized, 4)
         })
 
     return jsonify({"matches": matches})
