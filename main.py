@@ -7,7 +7,7 @@ import requests
 from insightface.app import FaceAnalysis
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 face_app = FaceAnalysis(
     name="buffalo_l",
@@ -21,8 +21,7 @@ def decode_base64_img(b64_data):
     try:
         img_data = base64.b64decode(b64_data)
         np_arr = np.frombuffer(img_data, np.uint8)
-        img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-        return img
+        return cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
     except Exception as e:
         print(f"❌ Failed to decode image: {e}")
         return None
@@ -45,8 +44,8 @@ def search():
     try:
         data = request.get_json(force=True)
     except Exception as e:
-        print(f"❌ 415 error: Invalid JSON: {e}")
-        return jsonify({'error': f'Invalid JSON: {str(e)}'}), 415
+        print(f"❌ Invalid JSON: {e}")
+        return jsonify({'error': 'Invalid JSON'}), 415
 
     references = data.get("references", [])
     thumbnails = data.get("thumbnails", [])
@@ -66,13 +65,11 @@ def search():
     matches = []
     for thumb in thumbnails:
         try:
-            resp = requests.get(thumb["thumbnail"], timeout=5)
+            resp = requests.get(thumb["thumbnail"], timeout=3)
             if resp.status_code != 200:
-                print(f"❌ Failed to fetch thumbnail: {thumb['thumbnail']} {resp.status_code}")
                 continue
             img = cv2.imdecode(np.frombuffer(resp.content, np.uint8), cv2.IMREAD_COLOR)
-        except Exception as e:
-            print(f"❌ Error fetching thumbnail: {e}")
+        except:
             continue
 
         if img is None:
@@ -94,6 +91,3 @@ def search():
         })
 
     return jsonify({"matches": matches})
-
-if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=8080)
