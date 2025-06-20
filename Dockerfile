@@ -1,4 +1,4 @@
-# Use slim Python base image
+# Use slim Python image
 FROM python:3.9-slim
 
 # Install system dependencies
@@ -9,28 +9,28 @@ RUN apt-get update && \
     libgl1-mesa-glx \
     libglib2.0-0 \
     unzip \
-    curl && \
-    rm -rf /var/lib/apt/lists/*
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
+# Set work directory
 WORKDIR /app
 
 # Copy requirements and install
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Download and extract buffalo_l model
+# Download model
 RUN curl -L "https://www.dropbox.com/scl/fi/6kpvzmv25fs3r2im5ztq9/buffalo_l.zip?rlkey=0nlgnsc9qkt6evwi8vwxcycnu&st=glukkdhq&dl=1" \
     -o buffalo_l.zip && \
     mkdir -p /app/buffalo_l && \
     unzip buffalo_l.zip -d /app/buffalo_l && \
     rm buffalo_l.zip
 
-# Copy the app code
+# Copy app code
 COPY . .
 
 # Expose port
 EXPOSE 8080
 
-# Run app with Gunicorn with extended timeout to avoid worker timeouts
-CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:8080", "--timeout", "120", "main:app"]
+# Launch with Gunicorn for better stability
+CMD ["gunicorn", "--workers=1", "--threads=2", "--timeout=300", "--bind=0.0.0.0:8080", "main:app"]
