@@ -33,4 +33,4 @@ COPY . .
 EXPOSE 8080
 
 # Launch with Gunicorn for better stability
-CMD ["gunicorn", "--workers=1", "--threads=2", "--timeout=300", "--bind=0.0.0.0:8080", "main:app"]
+CMD ["gunicorn", "--workers=1", "--threads=2", "--timeout=300", "--bind=0.0.0.0:${PORT}", "main:app"]
