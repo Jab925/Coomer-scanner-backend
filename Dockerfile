@@ -29,8 +29,8 @@ RUN curl -L "https://www.dropbox.com/scl/fi/6kpvzmv25fs3r2im5ztq9/buffalo_l.zip?
 # Copy app code
 COPY . .
 
-# Expose port
+# Expose port (Railway will dynamically assign, but no harm exposing 8080)
 EXPOSE 8080
 
-# Launch with Gunicorn for better stability
-CMD ["gunicorn", "--workers=1", "--threads=2", "--timeout=300", "--bind=0.0.0.0:${PORT}", "main:app"]
+# Launch with Gunicorn (shell form CMD so ${PORT} is expanded)
+CMD gunicorn --workers=1 --threads=2 --timeout=300 --bind=0.0.0.0:${PORT} main:app
