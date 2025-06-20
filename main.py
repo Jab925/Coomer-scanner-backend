@@ -9,13 +9,20 @@ from insightface.app import FaceAnalysis
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-face_app = FaceAnalysis(
-    name="buffalo_l",
-    root="/app/buffalo_l",
-    providers=["CPUExecutionProvider"],
-    download=False
-)
-face_app.prepare(ctx_id=0)
+# Lazy-load FaceAnalysis so Railway doesn't kill the app on slow startup
+face_app = None
+
+def get_face_app():
+    global face_app
+    if face_app is None:
+        face_app = FaceAnalysis(
+            name="buffalo_l",
+            root="/app/buffalo_l",
+            providers=["CPUExecutionProvider"],
+            download=False
+        )
+        face_app.prepare(ctx_id=0)
+    return face_app
 
 def decode_base64_img(b64_data):
     try:
@@ -27,6 +34,7 @@ def decode_base64_img(b64_data):
         return None
 
 def extract_embedding(img):
+    face_app = get_face_app()
     faces = face_app.get(img)
     if faces:
         return faces[0].normed_embedding
@@ -34,6 +42,10 @@ def extract_embedding(img):
 
 def cosine_similarity(a, b):
     return float(np.dot(a, b))
+
+@app.route('/')
+def index():
+    return "OK"
 
 @app.route('/health')
 def health():
