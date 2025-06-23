@@ -53,6 +53,8 @@ def health():
 
 @app.route('/search', methods=['POST'])
 def search():
+    print("🚀 /search request received")
+
     try:
         data = request.get_json(force=True)
     except Exception as e:
@@ -74,21 +76,29 @@ def search():
         print("⚠ No valid reference embeddings")
         return jsonify({"matches": []})
 
+    # TEMP LIMIT for testing
+    thumbnails = thumbnails[:5]
+
     matches = []
     for thumb in thumbnails:
         try:
-            resp = requests.get(thumb["thumbnail"], timeout=3)
+            print(f"🌐 Fetching thumbnail: {thumb['thumbnail']}")
+            resp = requests.get(thumb["thumbnail"], timeout=1)
             if resp.status_code != 200:
+                print(f"❌ Failed to load {thumb['thumbnail']} — status {resp.status_code}")
                 continue
             img = cv2.imdecode(np.frombuffer(resp.content, np.uint8), cv2.IMREAD_COLOR)
-        except:
+        except Exception as e:
+            print(f"⚠ Failed to load thumbnail {thumb['thumbnail']} : {e}")
             continue
 
         if img is None:
+            print(f"❌ Decoding failed for {thumb['thumbnail']}")
             continue
 
         emb = extract_embedding(img)
         if emb is None:
+            print(f"⚠ No face found in {thumb['thumbnail']}")
             continue
 
         sims = [cosine_similarity(emb, ref_emb) for ref_emb in ref_embeddings]
@@ -102,4 +112,5 @@ def search():
             "similarity": round(normalized, 4)
         })
 
+    print(f"🎯 /search finished. {len(matches)} matches found")
     return jsonify({"matches": matches})
