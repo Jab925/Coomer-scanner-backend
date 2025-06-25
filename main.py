@@ -9,41 +9,43 @@ import threading
 import time
 from insightface.app import FaceAnalysis
 
-# === Configuration ===
+# === Config ===
 APP_URL = "https://coomer-scanner-backend-production.up.railway.app"
-KEEP_ALIVE_INTERVAL = 60  # seconds
+KEEP_ALIVE_INTERVAL = 60
 
+# === App Setup ===
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 face_app = None
 
-# === Load model only when needed ===
 def get_face_app():
     global face_app
     if face_app is None:
-        logging.info("⏳ Initializing FaceAnalysis model...")
-        face_app = FaceAnalysis(
-            name="buffalo_l",
-            root="/app/buffalo_l",
-            providers=["CPUExecutionProvider"],
-            download=False
-        )
-        face_app.prepare(ctx_id=0)
-        logging.info("✅ FaceAnalysis ready")
+        try:
+            logging.info("⏳ Initializing FaceAnalysis model...")
+            face_app = FaceAnalysis(
+                name="buffalo_l",
+                root="/app/buffalo_l",
+                providers=["CPUExecutionProvider"],
+                download=False
+            )
+            face_app.prepare(ctx_id=0)
+            logging.info("✅ FaceAnalysis model ready")
+        except Exception as e:
+            logging.error(f"❌ Failed to initialize FaceAnalysis: {e}")
+            raise
     return face_app
 
-# === Decode Base64 image ===
 def decode_base64_img(b64_data):
     try:
         img_data = base64.b64decode(b64_data)
         np_arr = np.frombuffer(img_data, np.uint8)
         return cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
     except Exception as e:
-        logging.error(f"❌ Failed to decode image: {e}")
+        logging.error(f"❌ Failed to decode base64 image: {e}")
         return None
 
-# === Extract facial embedding ===
 def extract_embedding(img):
     try:
         face_app = get_face_app()
@@ -51,29 +53,27 @@ def extract_embedding(img):
         if faces:
             return faces[0].normed_embedding
     except Exception as e:
-        logging.error(f"❌ Face extraction failed: {e}")
+        logging.error(f"❌ Embedding extraction failed: {e}")
     return None
 
-# === Cosine similarity ===
 def cosine_similarity(a, b):
     return float(np.dot(a, b))
 
-# === Routes ===
-@app.route('/')
+@app.route("/")
 def index():
-    return "OK"
+    return "Backend is running"
 
-@app.route('/health')
+@app.route("/health")
 def health():
     return "ok"
 
-@app.route('/search', methods=['POST'])
+@app.route("/search", methods=["POST"])
 def search():
     try:
         data = request.get_json(force=True)
     except Exception as e:
-        logging.error(f"❌ Invalid JSON: {e}")
-        return jsonify({'error': 'Invalid JSON'}), 415
+        logging.error(f"❌ Invalid JSON input: {e}")
+        return jsonify({"error": "Invalid JSON"}), 400
 
     references = data.get("references", [])
     thumbnails = data.get("thumbnails", [])
@@ -87,7 +87,7 @@ def search():
                 ref_embeddings.append(emb)
 
     if not ref_embeddings:
-        logging.warning("⚠ No valid reference embeddings")
+        logging.warning("⚠️ No reference embeddings generated")
         return jsonify({"matches": []})
 
     matches = []
@@ -97,11 +97,10 @@ def search():
             if resp.status_code != 200:
                 continue
             img = cv2.imdecode(np.frombuffer(resp.content, np.uint8), cv2.IMREAD_COLOR)
+            if img is None:
+                continue
         except Exception as e:
-            logging.warning(f"❌ Error fetching thumbnail: {e}")
-            continue
-
-        if img is None:
+            logging.warning(f"❌ Failed to fetch thumbnail {thumb['thumbnail']}: {e}")
             continue
 
         emb = extract_embedding(img)
@@ -112,35 +111,35 @@ def search():
         similarity = max(sims)
         normalized = (similarity + 1) / 2
 
-        logging.info(f"✅ Match: {thumb['thumbnail']} → raw {similarity:.4f}, normalized {normalized:.4f}")
-
         matches.append({
             "thumbnail": thumb["thumbnail"],
             "post_url": thumb["post_url"],
             "similarity": round(normalized, 4)
         })
 
+        logging.info(f"✅ Match: {thumb['thumbnail']} → {normalized:.4f}")
+
     return jsonify({"matches": matches})
+
 
 # === Keep Alive Thread ===
 def keep_alive():
-    logging.info("🕒 Waiting 30s before first keep-alive ping...")
     time.sleep(30)
-
     while True:
         try:
-            logging.debug("⏳ Keep-alive ping...")
+            logging.debug("🔁 Keep-alive ping...")
             res = requests.get(f"{APP_URL}/health", timeout=10)
             if res.status_code == 200:
-                logging.debug("✅ Keep-alive response OK")
+                logging.debug("✅ Keep-alive OK")
             else:
-                logging.warning(f"⚠️ Keep-alive got non-200: {res.status_code}")
+                logging.warning(f"⚠️ Keep-alive response: {res.status_code}")
         except Exception as e:
             logging.warning(f"❌ Keep-alive error: {e}")
         time.sleep(KEEP_ALIVE_INTERVAL)
 
-# === Start App ===
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     threading.Thread(target=keep_alive, daemon=True).start()
-    app.run(host='0.0.0.0', port=8080)
+    logging.info("🚀 Launching Flask backend")
+    app.run(host="0.0.0.0", port=8080)
