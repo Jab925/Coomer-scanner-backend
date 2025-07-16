@@ -8,14 +8,10 @@ import logging
 import threading
 import time
 from insightface.app import FaceAnalysis
-import imagehash
-from PIL import Image
-from io import BytesIO
 
 # === Config ===
 APP_URL = "https://coomer-scanner-backend-production.up.railway.app"
 KEEP_ALIVE_INTERVAL = 60
-TATTOO_SIM_THRESHOLD = 0.60  # Phash similarity threshold
 
 # === App Setup ===
 app = Flask(__name__)
@@ -60,15 +56,6 @@ def extract_embedding(img):
         logging.error(f"❌ Embedding extraction failed: {e}")
     return None
 
-def phash_image(img):
-    try:
-        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        pil_img = Image.fromarray(img_rgb)
-        return imagehash.phash(pil_img)
-    except Exception as e:
-        logging.error(f"❌ Failed to compute phash: {e}")
-        return None
-
 def cosine_similarity(a, b):
     return float(np.dot(a, b))
 
@@ -92,20 +79,15 @@ def search():
     thumbnails = data.get("thumbnails", [])
 
     ref_embeddings = []
-    ref_phashes = []
     for ref in references:
         img = decode_base64_img(ref.get("data", ""))
         if img is not None:
             emb = extract_embedding(img)
             if emb is not None:
                 ref_embeddings.append(emb)
-            else:
-                ph = phash_image(img)
-                if ph is not None:
-                    ref_phashes.append(ph)
 
-    if not ref_embeddings and not ref_phashes:
-        logging.warning("⚠️ No valid reference embeddings or phashes")
+    if not ref_embeddings:
+        logging.warning("⚠️ No reference embeddings generated")
         return jsonify({"matches": []})
 
     matches = []
@@ -121,35 +103,20 @@ def search():
             logging.warning(f"❌ Failed to fetch thumbnail {thumb['thumbnail']}: {e}")
             continue
 
-        match_type = None
-        similarity = 0.0
-
-        # Try face match
         emb = extract_embedding(img)
+
         if emb is not None and len(ref_embeddings) > 0:
             sims = [cosine_similarity(emb, ref_emb) for ref_emb in ref_embeddings]
             similarity = max(sims)
-            similarity = round((similarity + 1) / 2, 4)  # normalize 0–1
-            match_type = "face"
-
-        # Try tattoo match if no face match or weak face match
-        if (emb is None or similarity < TATTOO_SIM_THRESHOLD) and len(ref_phashes) > 0:
-            thumb_ph = phash_image(img)
-            if thumb_ph is not None:
-                sims = [1 - (thumb_ph - ref_ph) / 64 for ref_ph in ref_phashes]
-                best = max(sims)
-                if best >= TATTOO_SIM_THRESHOLD:
-                    similarity = round(best, 4)
-                    match_type = "tattoo"
-
-        if similarity > 0 and match_type:
+            normalized = (similarity + 1) / 2
             matches.append({
                 "thumbnail": thumb["thumbnail"],
                 "post_url": thumb["post_url"],
-                "similarity": similarity,
-                "type": match_type
+                "similarity": round(normalized, 4)
             })
-            logging.info(f"✅ Match ({match_type}): {thumb['thumbnail']} → {similarity:.4f}")
+            logging.info(f"✅ Match: {thumb['thumbnail']} → {normalized:.4f}")
+        else:
+            logging.info(f"🤔 No face embedding found for {thumb['thumbnail']} — skipped match")
 
     return jsonify({"matches": matches})
 
@@ -168,6 +135,7 @@ def keep_alive():
         except Exception as e:
             logging.warning(f"❌ Keep-alive error: {e}")
         time.sleep(KEEP_ALIVE_INTERVAL)
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
