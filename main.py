@@ -8,16 +8,21 @@ import logging
 import threading
 import time
 from insightface.app import FaceAnalysis
+from PIL import Image
+import imagehash
+from io import BytesIO
 
 # === Config ===
 APP_URL = "https://coomer-scanner-backend-production.up.railway.app"
 KEEP_ALIVE_INTERVAL = 60
+TATTOO_THRESHOLD = 8  # Lower is more similar for perceptual hashes
 
 # === App Setup ===
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 face_app = None
+ref_hashes = []
 
 def get_face_app():
     global face_app
@@ -56,6 +61,15 @@ def extract_embedding(img):
         logging.error(f"❌ Embedding extraction failed: {e}")
     return None
 
+def compute_hash(img):
+    try:
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        pil_img = Image.fromarray(img_rgb)
+        return imagehash.phash(pil_img)
+    except Exception as e:
+        logging.error(f"❌ Hash computation failed: {e}")
+        return None
+
 def cosine_similarity(a, b):
     return float(np.dot(a, b))
 
@@ -69,6 +83,7 @@ def health():
 
 @app.route("/search", methods=["POST"])
 def search():
+    global ref_hashes
     try:
         data = request.get_json(force=True)
     except Exception as e:
@@ -79,18 +94,25 @@ def search():
     thumbnails = data.get("thumbnails", [])
 
     ref_embeddings = []
+    ref_hashes = []
+
     for ref in references:
         img = decode_base64_img(ref.get("data", ""))
         if img is not None:
             emb = extract_embedding(img)
             if emb is not None:
                 ref_embeddings.append(emb)
+            else:
+                ref_hash = compute_hash(img)
+                if ref_hash:
+                    ref_hashes.append(ref_hash)
 
-    if not ref_embeddings:
-        logging.warning("⚠️ No reference embeddings generated")
+    if not ref_embeddings and not ref_hashes:
+        logging.warning("⚠️ No usable reference data")
         return jsonify({"matches": []})
 
     matches = []
+
     for thumb in thumbnails:
         try:
             resp = requests.get(thumb["thumbnail"], timeout=3)
@@ -104,8 +126,7 @@ def search():
             continue
 
         emb = extract_embedding(img)
-
-        if emb is not None and len(ref_embeddings) > 0:
+        if emb is not None and ref_embeddings:
             sims = [cosine_similarity(emb, ref_emb) for ref_emb in ref_embeddings]
             similarity = max(sims)
             normalized = (similarity + 1) / 2
@@ -114,9 +135,20 @@ def search():
                 "post_url": thumb["post_url"],
                 "similarity": round(normalized, 4)
             })
-            logging.info(f"✅ Match: {thumb['thumbnail']} → {normalized:.4f}")
-        else:
-            logging.info(f"🤔 No face embedding found for {thumb['thumbnail']} — skipped match")
+            logging.info(f"✅ Face Match: {thumb['thumbnail']} → {normalized:.4f}")
+        elif ref_hashes:
+            thumb_hash = compute_hash(img)
+            if thumb_hash:
+                distances = [thumb_hash - h for h in ref_hashes]
+                best = min(distances)
+                if best <= TATTOO_THRESHOLD:
+                    similarity = 1 - (best / 64)
+                    matches.append({
+                        "thumbnail": thumb["thumbnail"],
+                        "post_url": thumb["post_url"],
+                        "similarity": round(similarity, 4)
+                    })
+                    logging.info(f"🎯 Tattoo Match: {thumb['thumbnail']} → dist={best}, sim={similarity:.4f}")
 
     return jsonify({"matches": matches})
 
@@ -135,7 +167,6 @@ def keep_alive():
         except Exception as e:
             logging.warning(f"❌ Keep-alive error: {e}")
         time.sleep(KEEP_ALIVE_INTERVAL)
-
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
